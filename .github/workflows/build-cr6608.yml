@@ -35,6 +35,8 @@ env:
 
 jobs:
   build:
+    permissions:
+      contents: write  # <--- هذا هو السطر الذي تمت إضافته لحل مشكلة الصلاحيات
     runs-on: ubuntu-latest # تم التعديل: استخدام أحدث نظام لتجنب الفشل
     timeout-minutes: 360
 
