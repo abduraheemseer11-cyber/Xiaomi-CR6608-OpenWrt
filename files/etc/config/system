@@ -1,0 +1,14 @@
+config system
+	option hostname 'Alameer.AX'
+	option timezone '<+03>-3'
+	option zonename 'Asia/Aden'
+	option ttylogin '0'
+	option log_size '64'
+	option conloglevel '8'
+	option cronloglevel '5'
+
+config timeserver 'ntp'
+	option enabled '0'
+	option enable_server '0'
+	list server '0.openwrt.pool.ntp.org'
+	list server '1.openwrt.pool.ntp.org'

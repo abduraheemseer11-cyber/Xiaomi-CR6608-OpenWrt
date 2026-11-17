@@ -1,0 +1,89 @@
+name: Build Alameer OpenWrt - Xiaomi CR6608
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: "OpenWrt 23.05.x release (e.g. 23.05.5)"
+        required: true
+        default: "23.05.5"
+      publish_release:
+        description: "Publish a GitHub Release with the images"
+        type: boolean
+        default: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  OPENWRT_VERSION: ${{ github.event.inputs.openwrt_version || '23.05.5' }}
+  TARGET: ramips
+  SUBTARGET: mt7621
+  PROFILE: xiaomi_mi-router-cr6608
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk git gettext \
+            libssl-dev xsltproc rsync wget unzip python3 zstd xz-utils imagemagick
+
+      - name: Prepare branding assets
+        run: ./scripts/prepare-assets.sh
+
+      - name: Download ImageBuilder
+        run: |
+          BASE="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/${TARGET}/${SUBTARGET}"
+          FILE="openwrt-imagebuilder-${OPENWRT_VERSION}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.xz"
+          wget -q "$BASE/$FILE"
+          tar -xJf "$FILE"
+          mv "openwrt-imagebuilder-${OPENWRT_VERSION}-${TARGET}-${SUBTARGET}.Linux-x86_64" imagebuilder
+
+      - name: Fetch Argon theme packages
+        run: ./scripts/fetch-argon.sh imagebuilder/packages
+
+      - name: Build firmware
+        run: |
+          PACKAGES="
+            luci luci-ssl luci-theme-argon luci-app-argon-config luci-i18n-base-ar luci-i18n-base-en luci-compat
+            softethervpn5-client openvpn-openssl luci-app-openvpn eoip xl2tpd rp-pppoe-server rp-pppoe-relay
+            lldpd olsrd batmand mesh11sd openwisp-config
+            firewall4 banip luci-app-banip mwan3 luci-app-mwan3 nft-qos qos-scripts
+            watchcat luci-app-watchcat tinyproxy samba4-server miniupnpd
+          "
+          cd imagebuilder
+          make image PROFILE="${PROFILE}" PACKAGES="$(echo $PACKAGES | xargs)" \
+               FILES="$GITHUB_WORKSPACE/files" EXTRA_IMAGE_NAME="alameer"
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cd imagebuilder/bin/targets/${TARGET}/${SUBTARGET}
+          cp *${PROFILE}*sysupgrade.bin *${PROFILE}*factory.bin "$GITHUB_WORKSPACE/out/" 2>/dev/null || \
+            cp *${PROFILE}*.bin "$GITHUB_WORKSPACE/out/"
+          cp *.manifest "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
+          cd "$GITHUB_WORKSPACE/out" && sha256sum * > sha256sums.txt && ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alameer-cr6608-${{ env.OPENWRT_VERSION }}
+          path: out/*
+
+      - name: Publish release
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('alameer-cr6608-{0}-{1}', env.OPENWRT_VERSION, github.run_number) }}
+          name: Alameer Software CR6608 - OpenWrt ${{ env.OPENWRT_VERSION }}
+          body: |
+            Custom OpenWrt ${{ env.OPENWRT_VERSION }} for Xiaomi Mi Router CR6608 (ramips/mt7621).
+            Boots as Dumb AP at 192.168.1.20. Use `sysupgrade.bin` for upgrades from OpenWrt, `factory.bin` for first install.
+          files: out/*

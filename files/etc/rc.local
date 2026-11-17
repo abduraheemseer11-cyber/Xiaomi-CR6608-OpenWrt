@@ -1,0 +1,18 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+# Heavy routing/VPN services stay installed but are kept disabled at boot.
+# Re-enable manually when needed:  /etc/init.d/<service> enable && /etc/init.d/<service> start
+/etc/init.d/dnsmasq disable
+/etc/init.d/firewall disable
+/etc/init.d/nft-qos disable
+/etc/init.d/odhcpd disable
+/etc/init.d/qos disable
+/etc/init.d/mwan3 disable
+/etc/init.d/banip disable
+/etc/init.d/xl2tpd disable
+/etc/init.d/mesh11sd disable
+/etc/init.d/batmand disable
+/etc/init.d/openwisp_config disable
+/etc/init.d/eoip disable
+exit 0

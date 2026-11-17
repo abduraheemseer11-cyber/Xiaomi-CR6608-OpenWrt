@@ -1,0 +1,39 @@
+#!/bin/sh
+# Dumb-AP Wi-Fi defaults for CR6608 (MT7915, Wi-Fi 6).
+# Applied through UCI so we don't have to hard-code the PCIe "path" of the radios.
+
+# Make sure the radios have been detected/generated
+uci -q get wireless.radio0 >/dev/null || wifi config
+uci -q get wireless.radio0 >/dev/null || exit 1   # retry on next boot
+
+setup_radio() {
+	local radio="$1" band="$2" htmode="$3" channel="$4" txpower="$5" ssid="$6"
+
+	uci set wireless.${radio}.band="$band"
+	uci set wireless.${radio}.htmode="$htmode"
+	uci set wireless.${radio}.channel="$channel"
+	uci set wireless.${radio}.txpower="$txpower"
+	uci set wireless.${radio}.beacon_int='50'
+	uci set wireless.${radio}.cell_density='0'
+	uci set wireless.${radio}.disabled='0'
+	# Channel 116 is DFS: set your regulatory domain, e.g. uncomment:
+	# uci set wireless.${radio}.country='YE'
+
+	local iface="default_${radio}"
+	uci -q get wireless.${iface} >/dev/null || {
+		uci set wireless.${iface}=wifi-iface
+		uci set wireless.${iface}.device="${radio}"
+	}
+	uci set wireless.${iface}.network='lan'
+	uci set wireless.${iface}.mode='ap'
+	uci set wireless.${iface}.ssid="$ssid"
+	uci set wireless.${iface}.encryption='none'
+	uci set wireless.${iface}.isolate='1'
+	uci set wireless.${iface}.disassoc_low_ack='0'
+}
+
+setup_radio radio0 2g HE20  5   38 'AL-AMEER-NET (  )_2G'
+setup_radio radio1 5g HE40 116  26 'AL-AMEER-NET (   )_5G'
+
+uci commit wireless
+exit 0

@@ -1,0 +1,8 @@
+config lldpd 'config'
+	option enabled '1'
+	list interface 'loopback'
+	list interface 'lan'
+	option enable_cdp '1'
+	option enable_fdp '1'
+	option lldpmed_fast_start '1'
+	option force_lldp '1'

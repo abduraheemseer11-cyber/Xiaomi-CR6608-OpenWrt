@@ -1,0 +1,75 @@
+#!/bin/sh
+# Alameer Software branding for LuCI / Argon + system identity.
+
+ARGON=/www/luci-static/argon
+IMG=$ARGON/img
+RES=/www/luci-static/resources
+
+# ---- 1. Images -------------------------------------------------------------
+# Files uploaded in the repo are already overlaid at these paths; this block
+# only makes sure every location the theme/browsers look at gets the brand.
+[ -f $IMG/logo.png ] || { [ -f $RES/logo.png ] && cp $RES/logo.png $IMG/logo.png; }
+[ -f $RES/logo.png ] || { [ -f $IMG/logo.png ] && cp $IMG/logo.png $RES/logo.png; }
+
+if [ -f $IMG/favicon.ico ]; then
+	cp $IMG/favicon.ico $ARGON/favicon.ico
+	cp $IMG/favicon.ico /www/favicon.ico
+	cp $IMG/favicon.ico $RES/favicon.ico
+fi
+
+if [ -f $IMG/bg1.jpg ]; then
+	mkdir -p $ARGON/background
+	rm -f $ARGON/background/*.jpg $ARGON/background/*.png $ARGON/background/*.webp
+	cp $IMG/bg1.jpg $ARGON/background/bg1.jpg
+fi
+
+# Replace the stock Argon SVG logo with a wrapper that embeds our PNG
+# (an <img>-loaded SVG cannot reference external files, so embed as base64).
+if [ -f $IMG/logo.png ] && command -v base64 >/dev/null 2>&1; then
+	B64="$(base64 $IMG/logo.png | tr -d '\n')"
+	cat > $IMG/argon.svg <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 334 339"><image width="334" height="339" xlink:href="data:image/png;base64,$B64"/></svg>
+SVG
+fi
+
+# ---- 2. LuCI texts (header / login footer) -----------------------------------
+for t in /usr/lib/lua/luci/view/themes/argon/footer.htm \
+         /usr/lib/lua/luci/view/themes/argon/footer_login.htm; do
+	[ -f "$t" ] || continue
+	grep -q 'Alameer Software' "$t" || \
+		sed -i 's#</footer>#<span class="alameer-brand"> \&middot; Alameer Software</span></footer>#' "$t"
+done
+
+# Replace "OpenWrt"/"LuCI" version string shown in footer
+for v in /usr/lib/lua/luci/version.lua; do
+	[ -f "$v" ] && sed -i 's#distname *= *"[^"]*"#distname = "Alameer Software"#' "$v"
+done
+
+# Login logo + footer text via CSS (selectors may need tuning per Argon version)
+CSS=$ARGON/css/cascade.css
+if [ -f "$CSS" ] && ! grep -q 'alameer-brand-css' "$CSS"; then
+cat >> "$CSS" <<'CSSEOF'
+
+/* alameer-brand-css */
+.login-container::before,
+.login-page .login-container::before{
+	content:"";display:block;width:140px;height:142px;margin:0 auto 14px;
+	background:url(/luci-static/argon/img/logo.png) center/contain no-repeat;}
+.main-left .logo, header .brand, .brand{ background-image:none; }
+.alameer-brand{opacity:.85;font-weight:600;}
+CSSEOF
+fi
+
+# ---- 3. System identity ------------------------------------------------------
+sed -i 's#^DISTRIB_DESCRIPTION=.*#DISTRIB_DESCRIPTION='"'"'Alameer Software (OpenWrt)'"'"'#' /etc/openwrt_release 2>/dev/null
+uci -q set system.@system[0].description='Alameer Software Custom Firmware'
+uci -q set system.@system[0].notes='Built with Alameer Software OpenWrt build system'
+uci -q commit system
+
+# Argon as default theme
+uci -q set luci.main.mediaurlbase='/luci-static/argon'
+uci -q set luci.main.lang='en'
+uci -q commit luci
+
+# Banner is shipped at /etc/banner (ASCII art ALAMEER SOFTWARE)
+exit 0
